@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import os
+import re
 
 
 # Définition d'une classe **Pipeline** servant à automatiser le formatage de nouvelles données devant 
@@ -10,13 +11,21 @@ import os
 
 
 PATH = "Data/"
+MODEL_PATH = "Data/model_rfc.pickle"
 
 LISTE_COL = ['code', 'url', 'countries_en','product_name', 'brands', 'allergens', 'nova_group', 
              'additives_en', 'additives_n', 'nutriscore_score', 'nutriscore_grade', 
              'ingredients_from_palm_oil_n', 'ingredients_that_may_be_from_palm_oil_n', 'energy_100g', 
              'saturated-fat_100g', 'trans-fat_100g', 'fat_100g', 'cholesterol_100g', 
              'carbohydrates_100g', 'TSu', 'sugars_100g', 'fiber_100g', 'proteins_100g', 'salt_100g', 
-             'vitamin-a_100g', 'vitamin-c_100g', 'calcium_100g', 'iron_100g'] 
+             'vitamin-a_100g', 'vitamin-c_100g', 'calcium_100g', 'iron_100g']
+
+LISTE_FEATS = ['energy_100g', 'fat_100g', 'saturated-fat_100g', 'TSu', 'proteins_100g', 'salt_100g', 'sugars_100g']
+
+LISTE_FR = ["France", "French", "french", "france", "français", "Français", "française", "Française", 
+            "FR", "fr", "Fr", "Belgique", "belgique", "belgium", "Belgium", "belge", "Suisse", 
+            "suisse", "Frankreich", "frankreich", "francais", "francaise", "Francia", "francia"]
+
 
 
 # Classe à utiliser en entrant le nom du nouveau df d'update en toutes lettres avec l'extension.
@@ -121,9 +130,29 @@ class Pipeline():
         
         for col in colonnes :
             self.df[col] = self.df[col].map(self.conv_suite_mots)
-            
-    
-    
+            conv_suite_mots
+
+        # complétion du "nutriscore_grade" grâce à notre modèle
+        modele = pickle.load(open(MODEL_PATH, "rb"))
+                
+        df_ac = self.df[self.df.nutriscore_grade.isnull()]
+        
+        for col in LISTE_FEATS :
+            df_ac = df_ac[df_ac[col].notnull()]
+
+        X = df_ac[feats]
+
+        df_ac["nutriscore_grade"] = modele.predict(X)
+
+        self.df.loc[df["nutriscore_grade"].isnull(), "nutriscore_grade"] = df_ac.nutriscore_grade
+
+        # réduction à la sphère francophone
+        self.df["countries_en"] = self.df["countries_en"].map(self.mapping_fr)
+        self.df = self.df[self.df["countries_en"] == "francophone"]
+        self.df = self.df.drop(["countries_en"], axis=1)
+
+
+
     # méthode de traitement des variables texte
     
     def conv_suite_mots(self, s):
@@ -165,6 +194,21 @@ class Pipeline():
             self.df.to_csv(os.path.join(PATH, "df.csv"), index = False)
     
     
+    def mapping_fr(self):
+
+    	for val in re.findall(r"[\w']+", str(value)): # utilisation d'une RE   
+        	if val in LISTE_FR :
+            	return "France"
+    
+    	return value
+
+
+
+
+
+
+
+
     
     # regroupement des étapes du traitement en une méthode à invoquer...
     
@@ -173,6 +217,7 @@ class Pipeline():
         self.pre()
         self.traitement()
         self.post()
+
 
 
 
